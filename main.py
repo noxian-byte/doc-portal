@@ -11,6 +11,13 @@ class Database:
         )
         self.cursor = self.db.cursor()
 
+#  Added a close connection function to end connection to the database.
+    def close_connection(self):
+        if self.db.is_connected():
+            self.cursor.close()
+            self.db.close()
+            print("Connection Closed")
+
     def fetch_one(self, query, params):
         self.cursor.execute(query, params)
         return self.cursor.fetchone()
@@ -109,13 +116,17 @@ def cancel_appointment():
     print("Appointment successfully canceled.")
 
 def view_appointments():
+#    CHANGES:
+#     Updated doctors column to first_name and last_name was just first, last.
+#     Changed WHERE a.appointment_status = 'scheduled', it was causing it to only show scheduled,
+#        we need to show all but completed
     appointments = db.fetch_all("""
-        SELECT a.appointment_id, p.first_name, p.last_name, d.first, d.last, 
-               a.appointment_date, a.appointment_time, a.reason, a.status
-        FROM Appointments a
-        JOIN Patients p ON a.patient_id = p.id
-        JOIN Doctors d ON a.doctor_id = d.id
-        WHERE a.status = 'scheduled'
+        SELECT a.appointment_id, p.first_name, p.last_name, d.first_name, d.last_name, 
+               a.appointment_date, a.appointment_time, a.reason_for_visit, a.appointment_status
+        FROM appointments a
+        JOIN patients p ON a.patient_id = p.patient_id
+        JOIN doctors d ON a.doctor_id = d.doctor_id
+        WHERE a.appointment_status != 'completed'
         ORDER BY a.appointment_date, a.appointment_time
     """)
 
@@ -158,6 +169,10 @@ def main_portal():
                 cancel_appointment()
             elif user_choice == 4:
                 view_appointments()
+
+                # Added this for better viewing of the appointments
+                input("Press enter for main menu: ")
+                main_portal()
             elif user_choice == 5:
                 print("Exiting the portal...")
                 break
@@ -166,3 +181,8 @@ def main_portal():
 
         except ValueError:
             print("Invalid input. Please enter a number from 1-5.")
+
+main_portal()
+
+# Close connection
+db.close_connection()
