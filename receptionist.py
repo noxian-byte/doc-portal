@@ -178,7 +178,7 @@ def receptionist_portal():
                 view_appointments()
                 # Added this for better viewing of the appointments and returns to the main menu when enter is pressed
                 input("\nPress enter for main menu: ")
-                receptionist_portal()
+
             elif user_choice == 5:
                 print("Exiting the portal...")
                 break
@@ -188,7 +188,7 @@ def receptionist_portal():
         except ValueError:
             print("Invalid input. Please enter a number from 1-5.")
 
-receptionist_portal()
+# receptionist_portal() commented out because it was being called preventing run to work
 
 # Close connection
-db.close_connection()
+# db.close_connection()
