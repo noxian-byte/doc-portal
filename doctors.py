@@ -1,22 +1,22 @@
-from receptionist import Database
-from receptionist import view_appointments
-from run import main_menu
 
+from receptionist import view_appointments
+
+from main import db
+from tabulate import tabulate
 
 def view_patient_records():
 
-    
-    while True:
-        view_record = input("Enter patient ID to view records: ")  
+    view_record = input("Enter patient ID to view records: ")
 
-        patient_records = db.fetch_all("SELECT * FROM medical_records WHERE patient_id = %s", (view_record,))
+    patient_records = db.fetch_all("SELECT * FROM medical_records WHERE patient_id = %s", (view_record,))
 
-        if patient_records:
-            for record in patient_records:
-                print(record)
-                break
-        else:
-            print("No records found for the given patient ID.")
+    if patient_records:
+        headers = ['record_id', 'patient_id', 'doctor_id', 'diagnosis', 'treatment', 'prescription',
+                   'visit_date', 'notes']
+        print(tabulate(patient_records, headers=headers, tablefmt='Grid'))
+
+    else:
+        print('No Records Found')
 
 def update_medical_records():
 
@@ -29,12 +29,12 @@ def update_medical_records():
 
 
     patient_name_tuple = db.fetch_one("SELECT first_name FROM patients WHERE patient_id = %s", (view_p1,))
-    
+
     if patient_name_tuple:
-        patient_name = patient_name_tuple[0]  
+        patient_name = patient_name_tuple[0]
     else:
         print(f"No patient found with ID {view_p1}. Please check the ID and try again.")
-        return  
+        return
     
     # view_p1 = input("Enter ID of patient: ")
 
@@ -170,13 +170,16 @@ def doctor_menu():
 
             if m2_choice == 1:
                 view_appointments()
-            elif m2_choice ==2:
-                view_patient_records()  
-            elif m2_choice ==3:
+                input("Press enter to continue")
+            elif m2_choice == 2:
+                view_patient_records()
+                input("Press Enter to Continue")
+            elif m2_choice == 3:
                 update_medical_records()
-
-            elif m2_choice ==4:
+                input("Press Enter to Continue")
+            elif m2_choice == 4:
                 generate_prescriptions()
+                input("Press Enter to Continue")
             elif m2_choice == 5:
                 pass
 
@@ -185,7 +188,7 @@ def doctor_menu():
 
             elif m2_choice == 7:
                 print("Exiting...")
-                main_menu()
+                break
 
             else:
                 print("Invalid option. Please choose between 1-7.") 
@@ -193,3 +196,4 @@ def doctor_menu():
         except ValueError:
             print("Invalid choice.")
 
+#  doctor_menu()

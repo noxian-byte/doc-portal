@@ -1,6 +1,3 @@
-"""
-TODO: check that cancel appointment is working
-"""
 
 import mysql.connector
 from app.config import Config
@@ -190,7 +187,8 @@ def main_portal():
         except ValueError:
             print("Invalid input. Please enter a number from 1-5.")
 
-main_portal()
+# Commented out to prevent from automatically running in run.py
+# main_portal()
 
-# Close connection
-db.close_connection()
+# Close connection will happen in run.py when program is finished
+# db.close_connection()
