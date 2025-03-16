@@ -1,5 +1,10 @@
+"""
+TODO: check that cancel appointment is working
+"""
+
 import mysql.connector
 from app.config import Config
+from tabulate import tabulate
 
 class Database:
     def __init__(self):
@@ -10,6 +15,12 @@ class Database:
             database=Config.DB_NAME
         )
         self.cursor = self.db.cursor()
+
+    def close_connection(self):
+        if self.db.is_connected():
+            self.cursor.close()
+            self.db.close()
+            print("Connection Closed")
 
     def fetch_one(self, query, params):
         self.cursor.execute(query, params)
@@ -32,13 +43,13 @@ print("Database Name:", Config.DB_NAME)
 def verify_patient():
     while True:
         patient_id = input("Enter Patient ID: ")
-        patient = db.fetch_one("SELECT * FROM Patients WHERE Id = %s", (patient_id,))
+        patient = db.fetch_one("SELECT * FROM patients WHERE patient_id = %s", (patient_id,))
         if patient:
             return patient_id  
         print("Error: Patient not found.")
 
 def select_doctor():
-    doctors = db.fetch_all("SELECT Id, First, Last, Specialty FROM Doctors")
+    doctors = db.fetch_all("SELECT doctor_id, first_name, last_name, specialty FROM doctors")
 
     print("\nAvailable doctors:")
     for doc in doctors:
@@ -46,19 +57,19 @@ def select_doctor():
 
     while True:
         doctor_id = input("\nEnter Doctor ID: ")
-        if db.fetch_one("SELECT * FROM Doctors WHERE Id = %s", (doctor_id,)):
+        if db.fetch_one("SELECT * FROM doctors WHERE doctor_id = %s", (doctor_id,)):
             return doctor_id  
         print("Error: Doctor not found.")
 
 def get_appointment_details():
     appointment_date = input("Enter appointment date (YYYY-MM-DD): ")
-    appointment_time = input("Enter appointment time (HH:MM): ")
+    appointment_time = input("Enter appointment time (HH:MM:SS): ")
     reason = input("Enter reason for visit: ")
     return appointment_date, appointment_time, reason
 
 def check_doctor_availability(doctor_id, appointment_date, appointment_time):
     conflict = db.fetch_one("""
-        SELECT * FROM Appointments 
+        SELECT * FROM appointments 
         WHERE doctor_id = %s AND appointment_date = %s AND appointment_time = %s
     """, (doctor_id, appointment_date, appointment_time))
     return not conflict
@@ -73,7 +84,8 @@ def schedule_appointment():
         return
 
     db.execute("""
-        INSERT INTO Appointments (patient_id, doctor_id, appointment_date, appointment_time, reason, status)
+        INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, reason_for_visit, 
+        appointment_status)
         VALUES (%s, %s, %s, %s, %s, 'scheduled')
     """, (patient_id, doctor_id, appointment_date, appointment_time, reason))
 
@@ -81,41 +93,56 @@ def schedule_appointment():
 
 def reschedule_appointment():
     appointment_id = input("Enter the Appointment ID: ")
-    if not db.fetch_one("SELECT * FROM Appointments WHERE appointment_id = %s", (appointment_id,)):
+    if not db.fetch_one("SELECT * FROM appointments WHERE appointment_id = %s", (appointment_id,)):
         print("Error: Appointment not found.")
         return
 
-    new_date, new_time, _ = get_appointment_details()
-
-    if not check_doctor_availability(appointment_id, new_date, new_time):
-        print("Error: The doctor is unavailable at this time.")
-        return
+    #  Gathers from input instead of using the function
+    #  No need to change reason if just being rescheduled
+    new_date = input("Enter new appointment date: ")
+    new_time = input("Enter new appointment time: ")
 
     db.execute("""
-        UPDATE Appointments 
-        SET appointment_date = %s, appointment_time = %s 
+        UPDATE appointments 
+        SET appointment_date = %s, appointment_time = %s, appointment_status = %s 
         WHERE appointment_id = %s
-    """, (new_date, new_time, appointment_id))
+""", (new_date, new_time,  'scheduled', appointment_id))
 
-    print("Appointment successfully rescheduled.")
+    rescheduled_apt = db.fetch_all("""
+        SELECT a.appointment_id, CONCAT(p.first_name,' ', p.last_name), CONCAT(d.first_name,' ', d.last_name), 
+               a.appointment_date, a.appointment_time, a.reason_for_visit, a.appointment_status
+        FROM appointments a
+        JOIN patients p ON a.patient_id = p.patient_id
+        JOIN doctors d ON a.doctor_id = d.doctor_id
+        WHERE a.appointment_id = %s 
+        ORDER BY a.appointment_date, a.appointment_time
+    """, (appointment_id,))
+
+    headers = ['Apt. ID', 'Patient Name', 'Doctor Name', 'Date', 'Time', 'Reason For Visit', 'Status']
+
+    print("\nAppointment successfully rescheduled.")
+    print(tabulate(rescheduled_apt, headers=headers, tablefmt='Grid'))
 
 def cancel_appointment():
     appointment_id = input("Enter the Appointment ID to cancel: ")
-    if not db.fetch_one("SELECT * FROM Appointments WHERE appointment_id = %s", (appointment_id,)):
+    if not db.fetch_one("SELECT * FROM appointments WHERE appointment_id = %s", (appointment_id,)):
         print("Error: Appointment not found.")
         return
 
-    db.execute("UPDATE Appointments SET status = 'canceled' WHERE appointment_id = %s", (appointment_id,))
+    db.execute("UPDATE appointments SET status = 'canceled' WHERE appointment_id = %s", (appointment_id,))
     print("Appointment successfully canceled.")
 
 def view_appointments():
+# CHANGES: Cleaned up the output
+# now using a table to display appointments
+# used concat to connect patients first and last name, and doctors first and last name
     appointments = db.fetch_all("""
-        SELECT a.appointment_id, p.first_name, p.last_name, d.first, d.last, 
-               a.appointment_date, a.appointment_time, a.reason, a.status
-        FROM Appointments a
-        JOIN Patients p ON a.patient_id = p.id
-        JOIN Doctors d ON a.doctor_id = d.id
-        WHERE a.status = 'scheduled'
+        SELECT a.appointment_id, CONCAT(p.first_name,' ', p.last_name), CONCAT(d.first_name,' ', d.last_name), 
+               a.appointment_date, a.appointment_time, a.reason_for_visit, a.appointment_status
+        FROM appointments a
+        JOIN patients p ON a.patient_id = p.patient_id
+        JOIN doctors d ON a.doctor_id = d.doctor_id
+        WHERE a.appointment_status != 'completed'
         ORDER BY a.appointment_date, a.appointment_time
     """)
 
@@ -123,17 +150,9 @@ def view_appointments():
         print("No scheduled appointments found.")
         return
 
-    print("\nScheduled Appointments:")
-    for appt in appointments:
-        print(f"""
-        Appointment ID: {appt[0]}
-        Patient: {appt[1]} {appt[2]}
-        Doctor: {appt[3]} {appt[4]}
-        Date: {appt[5]}
-        Time: {appt[6]}
-        Reason: {appt[7]}
-        Status: {appt[8]}
-        """)
+    headers = ['Apt. ID', 'Patient Name', 'Doctor Name', 'Date', 'Time', 'Reason For Visit', 'Status']
+    print("\nAppointments:")
+    print(tabulate(appointments, headers=headers, tablefmt='grid'))
 
 def main_portal():
     while True:
@@ -154,10 +173,14 @@ def main_portal():
                 schedule_appointment()
             elif user_choice == 2:
                 reschedule_appointment()
+                input("\nPress enter to continue: ")
             elif user_choice == 3:
                 cancel_appointment()
             elif user_choice == 4:
                 view_appointments()
+                # Added this for better viewing of the appointments and returns to the main menu when enter is pressed
+                input("\nPress enter for main menu: ")
+                main_portal()
             elif user_choice == 5:
                 print("Exiting the portal...")
                 break
@@ -166,3 +189,8 @@ def main_portal():
 
         except ValueError:
             print("Invalid input. Please enter a number from 1-5.")
+
+main_portal()
+
+# Close connection
+db.close_connection()
