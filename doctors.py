@@ -153,7 +153,7 @@ def generate_prescriptions():
 
 
 
-def doctor_menu(main_menu):
+def doctor_menu():
     while True:
         try:
             print("Welcome doctor.")
@@ -188,7 +188,6 @@ def doctor_menu(main_menu):
 
             elif m2_choice == 7:
                 print("Exiting...")
-                main_menu()
                 break
 
             else:
