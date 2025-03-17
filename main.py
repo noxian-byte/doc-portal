@@ -32,7 +32,7 @@ def main_menu():
             if menu_options == 1:
                 receptionist_portal()
             elif menu_options == 2:
-                doctor_menu()  # had to pass as argument
+                doctor_menu() 
 
             elif menu_options == 3:
                 patients_menu()

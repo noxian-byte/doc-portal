@@ -1,0 +1,7 @@
+GET_PATIENT_RECORDS = "SELECT * FROM medical_records WHERE patient_id = %s"
+GET_PATIENT_PRESCRIPTION = " SELECT prescription, patient_id FROM medical_records WHERE patient_id = %s"
+UPDATE_DIAGNOSIS = "UPDATE medical_records SET diagnosis = %s WHERE patient_id = %s"
+UPDATE_TREATMENT = "UPDATE medical_records SET treatment = %s WHERE patient_id = %s"
+UPDATE_PRESCRIPTION = "UPDATE medical_records SET prescription = %s WHERE patient_id = %s"
+UPDATE_DOCTOR_NOTE = "UPDATE medical_records SET doctor_note = %s WHERE patient_id = %s"
+GET_NOTES = "    SELECT notes FROM medical_records WHERE patient_id = %s"
