@@ -12,7 +12,7 @@ Notes:
     And the doctor can still manipulate the database as needed.
 """
 from doctors import *
-from patients import patients_menu
+from patients import *
 from receptionist import *
 from database import db 
 
@@ -35,7 +35,7 @@ def main_menu():
                 doctor_menu() 
 
             elif menu_options == 3:
-                patients_menu()
+                patient_menu()
 
             elif menu_options == 4:
                 print("Exiting the portal...")
