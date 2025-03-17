@@ -11,15 +11,14 @@ Notes:
     addition or adjustment.
     And the doctor can still manipulate the database as needed.
 """
-
-from receptionist import receptionist_portal
-from doctors import doctor_menu
+from doctors import *
 from patients import patients_menu
-from receptionist import db
-
+from receptionist import *
+from database import db 
 
 def main_menu():
     while True:
+
         try:
             print("Welcome to the main portal.")
             print("""

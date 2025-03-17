@@ -1,5 +1,4 @@
-# Started the patients.py file
-# Just made a menu
+from database import db 
 
 def patients_menu():
     while True:

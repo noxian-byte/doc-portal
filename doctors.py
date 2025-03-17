@@ -1,8 +1,9 @@
 
 from receptionist import view_appointments
 
-from main import db
+import main
 from tabulate import tabulate
+from database import db 
 
 def view_patient_records():
 
