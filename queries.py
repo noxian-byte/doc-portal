@@ -7,3 +7,4 @@ UPDATE_DOCTOR_NOTE = "UPDATE medical_records SET doctor_note = %s WHERE patient_
 GET_NOTES = " SELECT notes FROM medical_records WHERE patient_id = %s"
 GET_PATIENT_ID= "SELECT patient_id FROM patients WHERE patient_id = %s"
 GET_PATIENT_APPOINTMENTS = " SELECT * FROM appointments WHERE patient_id = %s"
+GET_PATIENT_NAME = "SELECT first_name, last_name FROM patients WHERE patient_id = %s"

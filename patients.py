@@ -1,7 +1,9 @@
 from database import db 
 from queries import *
 from tabulate import tabulate
-from receptionist import *
+from receptionist import * 
+import webbrowser
+import random
 
 def patient_appointments(patient_ID):
 
@@ -29,29 +31,75 @@ def access_records(patient_ID):
     if patient_records:
         print(tabulate(patient_records, headers=headers, tablefmt='grid'))
     else:
-        print(f"Your file does not have any medical records on it.Please consult with your doctor") #add doc name later
+        print(f"Your file does not have any medical records on it.Please consult with your doctor") 
 
 
-def request_prescription():
+def request_prescription(patient_ID):
 
-    patient_prescription = input("What prescription would you like to put in a request for? ")
+    patient_prescription = input("What prescription would you like to request? ")
 
-    # add patient request to a new table
+    db.execute("""
+        INSERT INTO prescription_requests (patient_id, prescription, request_status)
+        VALUES (%s, %s, %s)
+    """, (patient_id, patient_prescription, "Pending"))  # Default is 'Pending'
+
+    print(f"Your request for '{patient_prescription}' has been submitted and is pending approval.")
+
 
 def patient_report(patient_ID):
 
+    patient_name = db.fetchall(GET_PATIENT_NAME)
+
     view_reports = db.fetch_all(GET_NOTES, (patient_ID,))
+   
 
     headers = ['Patient ID', 'Lab Report']
 
     if view_reports:
-        print(f"\nThis is your lab report: .") # add patient name
+        print(f"\nThis is your lab report {GET_PATIENT_NAME}: ") 
         print(tabulate(view_reports, headers=headers, tablefmt='grid'))
     else:
         print(f"You currently do not have a lab report.")
 
-# def pay_bills():
-    #will add to it
+
+
+def pay_bills():
+    patient_id = input("Enter your Health ID: ").strip()
+
+   
+    valid_patient = db.fetch_one(GET_PATIENT_ID, (patient_id,))
+    if not valid_patient:
+        print("Invalid Health ID. Please try again.")
+        return
+
+    
+    try:
+        amount = float(input("Enter the amount to pay: $"))
+        if amount <= 0:
+            print("Invalid amount! Please enter a valid bill amount.")
+            return
+    except ValueError:
+        print("Invalid input! Please enter a valid numeric amount.")
+        return
+
+  
+    payment_reference = f"PAY-{random.randint(100000, 999999)}"
+
+   
+    db.execute("""
+        INSERT INTO payments (patient_id, amount, payment_status, paypal_transaction_id)
+        VALUES (%s, %s, 'Pending', %s)
+    """, (patient_id, amount, payment_reference))
+
+    print(f"Your payment reference is: {payment_reference}")
+
+    # invalid link
+    paypal_url = f"https://www.paypal.com/pay?hosted_button_id=nullamount={amount}&custom={payment_reference}"
+
+    print(f"Redirecting to PayPal: {paypal_url}")
+    webbrowser.open(paypal_url)  # Opens in default web browser
+
+    print("Please complete the payment. Your record will be updated once payment is confirmed.")
 
 def give_feedback(patient_ID):
     while True:

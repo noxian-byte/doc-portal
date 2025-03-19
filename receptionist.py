@@ -64,8 +64,7 @@ def reschedule_appointment():
         print("Error: Appointment not found.")
         return
 
-    #  Gathers from input instead of using the function
-    #  No need to change reason if just being rescheduled
+
     new_date = input("Enter new appointment date: ")
     new_time = input("Enter new appointment time: ")
 
@@ -100,9 +99,7 @@ def cancel_appointment():
     print("Appointment successfully canceled.")
 
 def view_appointments():
-# CHANGES: Cleaned up the output
-# now using a table to display appointments
-# used concat to connect patients first and last name, and doctors first and last name
+
     appointments = db.fetch_all("""
         SELECT a.appointment_id, CONCAT(p.first_name,' ', p.last_name), CONCAT(d.first_name,' ', d.last_name), 
                a.appointment_date, a.appointment_time, a.reason_for_visit, a.appointment_status
@@ -121,43 +118,63 @@ def view_appointments():
     print("\nAppointments:")
     print(tabulate(appointments, headers=headers, tablefmt='grid'))
 
+def confirm_payment():
+    payment_reference = input("Enter payment reference to confirm: ").strip()
+
+  
+    payment_record = db.fetch_one("""
+        SELECT payment_id, patient_id, amount, payment_status FROM payments WHERE paypal_transaction_id = %s
+    """, (payment_reference,))
+
+    if not payment_record:
+        print("Invalid payment reference!")
+        return
+
+    payment_id, patient_id, amount, status = payment_record
+
+    if status == "Completed":
+        print("Payment has already been confirmed.")
+        return
+
+    db.execute("""
+        UPDATE payments SET payment_status = 'Completed' WHERE paypal_transaction_id = %s
+    """, (payment_reference,))
+
+    print(f"Payment of ${amount} for Patient ID {patient_id} has been confirmed!")
+
+
 def receptionist_portal():
     while True:
+        print("\nWelcome to the Online Receptionist Portal.Choose an option:")
+        print("""
+        1. Schedule an Appointment
+        2. Reschedule an Appointment
+        3. Cancel an Appointment
+        4. View Scheduled Appointments 
+        5. Confirm Payments
+        6. Exit
+        """)
+
         try:
-            print(""" 
-            Welcome to the Online Receptionist Portal. 
+            m2_choice = int(input("Pick an option (1-6): "))
+            actions = {
+                1: schedule_appointment,
+                2: reschedule_appointment,
+                3: cancel_appointment,
+                4: view_appointments,
+                5: confirm_payment
+            }
 
-            1. Schedule an Appointment
-            2. Reschedule an Appointment
-            3. Cancel an Appointment
-            4. View Scheduled Appointments
-            5. Exit
-            """)
-
-            user_choice = int(input("Pick an option (1-5): "))   
-
-            if user_choice == 1:
-                schedule_appointment()
-            elif user_choice == 2:
-                reschedule_appointment()
-                input("\nPress enter to continue: ")
-            elif user_choice == 3:
-                cancel_appointment()
-            elif user_choice == 4:
-                view_appointments()
-                # Added this for better viewing of the appointments and returns to the main menu when enter is pressed
-                input("\nPress enter for main menu: ")
-
-            elif user_choice == 5:
-                print("Exiting the portal...")
-                break
+            if m2_choice in actions:
+                actions[m2_choice]() 
+            elif m2_choice == 6:
+                confirm_exit = input("Are you sure you want to exit? (y/n): ").strip().lower()
+                if confirm_exit == "y":
+                    print("Exiting...")
+                    break
             else:
-                print("Invalid option. Please choose between 1-5.")
+                print("Invalid option. Please choose between 1-6.")
 
         except ValueError:
-            print("Invalid input. Please enter a number from 1-5.")
+            print("Invalid choice! Please enter a number between 1 and 6.")
 
-# receptionist_portal() commented out because it was being called preventing run to work
-
-# Close connection
-# db.close_connection()
