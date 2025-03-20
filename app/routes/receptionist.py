@@ -1,180 +1,122 @@
-"""
-TODO: check that cancel appointment is working
-"""
+from flask import Blueprint, request, jsonify
+from app.models.database import db
+from app.models.queries import *
+import random
+import webbrowser
 
-from app.config import Config
-from tabulate import tabulate
-from database import db 
+receptionist_routes = Blueprint('receptionist_routes', __name__)
+
+@receptionist_routes.route('/appointments/<int:patient_id>', methods=['GET'])
+def receptionist_appointments(patient_id):
+    """
+    Fetch appointments for a patient or allow a receptionist to schedule a new appointment.
+    """
+    appointments = db.fetchall(GET_PATIENT_APPOINTMENTS, (patient_id,))
+    headers = ['Appointment Id', 'Patient ID', 'Doctor ID', 'Appointment Date', 'Appointment Time', 'Reason for visit', 'Status']
+
+    if appointments:
+        return jsonify([dict(zip(headers, appointment)) for appointment in appointments])
+    else:
+        return jsonify({"message": "No appointments found for this patient."}), 404
 
 
-def verify_patient():
-    while True:
-        patient_id = input("Enter Patient ID: ")
-        patient = db.fetch_one("SELECT * FROM patients WHERE patient_id = %s", (patient_id,))
-        if patient:
-            return patient_id  
-        print("Error: Patient not found.")
-
-def select_doctor():
-    doctors = db.fetch_all("SELECT doctor_id, first_name, last_name, specialty FROM doctors")
-
-    print("\nAvailable doctors:")
-    for doc in doctors:
-        print(f"ID: {doc[0]} | Name: {doc[1]} {doc[2]} | Specialty: {doc[3]}")
-
-    while True:
-        doctor_id = input("\nEnter Doctor ID: ")
-        if db.fetch_one("SELECT * FROM doctors WHERE doctor_id = %s", (doctor_id,)):
-            return doctor_id  
-        print("Error: Doctor not found.")
-
-def get_appointment_details():
-    appointment_date = input("Enter appointment date (YYYY-MM-DD): ")
-    appointment_time = input("Enter appointment time (HH:MM:SS): ")
-    reason = input("Enter reason for visit: ")
-    return appointment_date, appointment_time, reason
-
-def check_doctor_availability(doctor_id, appointment_date, appointment_time):
-    conflict = db.fetch_one("""
-        SELECT * FROM appointments 
-        WHERE doctor_id = %s AND appointment_date = %s AND appointment_time = %s
-    """, (doctor_id, appointment_date, appointment_time))
-    return not conflict
-
+@receptionist_routes.route('/appointments', methods=['POST'])
 def schedule_appointment():
-    patient_id = verify_patient()
-    doctor_id = select_doctor()
-    appointment_date, appointment_time, reason = get_appointment_details()
+    """
+    Receptionist schedules a new appointment for a patient.
+    """
+    patient_id = request.json.get('patient_id')
+    doctor_id = request.json.get('doctor_id')
+    appointment_date = request.json.get('appointment_date')
+    appointment_time = request.json.get('appointment_time')
+    reason_for_visit = request.json.get('reason_for_visit')
 
-    if not check_doctor_availability(doctor_id, appointment_date, appointment_time):
-        print("Error: The doctor is unavailable at this time. Please pick another time.")
-        return
-
-    db.execute("""
-        INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, reason_for_visit, 
-        appointment_status)
-        VALUES (%s, %s, %s, %s, %s, 'scheduled')
-    """, (patient_id, doctor_id, appointment_date, appointment_time, reason))
-
-    print("Appointment successfully scheduled.")
-
-def reschedule_appointment():
-    appointment_id = input("Enter the Appointment ID: ")
-    if not db.fetch_one("SELECT * FROM appointments WHERE appointment_id = %s", (appointment_id,)):
-        print("Error: Appointment not found.")
-        return
-
-
-    new_date = input("Enter new appointment date: ")
-    new_time = input("Enter new appointment time: ")
+    if not all([patient_id, doctor_id, appointment_date, appointment_time, reason_for_visit]):
+        return jsonify({"error": "All fields are required to schedule an appointment."}), 400
 
     db.execute("""
-        UPDATE appointments 
-        SET appointment_date = %s, appointment_time = %s, appointment_status = %s 
-        WHERE appointment_id = %s
-""", (new_date, new_time,  'scheduled', appointment_id))
+        INSERT INTO appointments (patient_id, doctor_id, appointment_date, appointment_time, reason_for_visit, status)
+        VALUES (%s, %s, %s, %s, %s, 'Scheduled')
+    """, (patient_id, doctor_id, appointment_date, appointment_time, reason_for_visit))
 
-    rescheduled_apt = db.fetch_all("""
-        SELECT a.appointment_id, CONCAT(p.first_name,' ', p.last_name), CONCAT(d.first_name,' ', d.last_name), 
-               a.appointment_date, a.appointment_time, a.reason_for_visit, a.appointment_status
-        FROM appointments a
-        JOIN patients p ON a.patient_id = p.patient_id
-        JOIN doctors d ON a.doctor_id = d.doctor_id
-        WHERE a.appointment_id = %s 
-        ORDER BY a.appointment_date, a.appointment_time
-    """, (appointment_id,))
+    return jsonify({"message": "Appointment successfully scheduled."}), 201
 
-    headers = ['Apt. ID', 'Patient Name', 'Doctor Name', 'Date', 'Time', 'Reason For Visit', 'Status']
 
-    print("\nAppointment successfully rescheduled.")
-    print(tabulate(rescheduled_apt, headers=headers, tablefmt='Grid'))
+@receptionist_routes.route('/records/<int:patient_id>', methods=['GET'])
+def access_patient_records(patient_id):
+    """
+    Fetch medical records for a patient.
+    """
+    records = db.fetchall(GET_PATIENT_RECORDS, (patient_id,))
+    headers = ['Record Id', 'Patient ID', 'Doctor ID', 'Diagnosis', 'Treatment', 'Prescription', 'Visit date', 'Doctors Notes']
 
-def cancel_appointment():
-    appointment_id = input("Enter the Appointment ID to cancel: ")
-    if not db.fetch_one("SELECT * FROM appointments WHERE appointment_id = %s", (appointment_id,)):
-        print("Error: Appointment not found.")
-        return
+    if records:
+        return jsonify([dict(zip(headers, record)) for record in records])
+    else:
+        return jsonify({"message": "No medical records found. Please consult with your doctor."}), 404
 
-    db.execute("UPDATE appointments SET status = 'canceled' WHERE appointment_id = %s", (appointment_id,))
-    print("Appointment successfully canceled.")
 
-def view_appointments():
-
-    appointments = db.fetch_all("""
-        SELECT a.appointment_id, CONCAT(p.first_name,' ', p.last_name), CONCAT(d.first_name,' ', d.last_name), 
-               a.appointment_date, a.appointment_time, a.reason_for_visit, a.appointment_status
-        FROM appointments a
-        JOIN patients p ON a.patient_id = p.patient_id
-        JOIN doctors d ON a.doctor_id = d.doctor_id
-        WHERE a.appointment_status != 'completed'
-        ORDER BY a.appointment_date, a.appointment_time
-    """)
-
-    if not appointments:
-        print("No scheduled appointments found.")
-        return
-
-    headers = ['Apt. ID', 'Patient Name', 'Doctor Name', 'Date', 'Time', 'Reason For Visit', 'Status']
-    print("\nAppointments:")
-    print(tabulate(appointments, headers=headers, tablefmt='grid'))
-
-def confirm_payment():
-    payment_reference = input("Enter payment reference to confirm: ").strip()
-
-  
-    payment_record = db.fetch_one("""
-        SELECT payment_id, patient_id, amount, payment_status FROM payments WHERE paypal_transaction_id = %s
-    """, (payment_reference,))
-
-    if not payment_record:
-        print("Invalid payment reference!")
-        return
-
-    payment_id, patient_id, amount, status = payment_record
-
-    if status == "Completed":
-        print("Payment has already been confirmed.")
-        return
+@receptionist_routes.route('/prescription_request/<int:patient_id>', methods=['POST'])
+def request_prescription(patient_id):
+    """
+    Allow a receptionist to request a prescription on behalf of a patient.
+    """
+    prescription = request.json.get('prescription')
+    
+    if not prescription:
+        return jsonify({"error": "Prescription is required."}), 400
 
     db.execute("""
-        UPDATE payments SET payment_status = 'Completed' WHERE paypal_transaction_id = %s
-    """, (payment_reference,))
+        INSERT INTO prescription_requests (patient_id, prescription, request_status)
+        VALUES (%s, %s, %s)
+    """, (patient_id, prescription, "Pending"))
 
-    print(f"Payment of ${amount} for Patient ID {patient_id} has been confirmed!")
+    return jsonify({"message": f"Your request for '{prescription}' has been submitted and is pending approval."}), 201
 
 
-def receptionist_portal():
-    while True:
-        print("\nWelcome to the Online Receptionist Portal.Choose an option:")
-        print("""
-        1. Schedule an Appointment
-        2. Reschedule an Appointment
-        3. Cancel an Appointment
-        4. View Scheduled Appointments 
-        5. Confirm Payments
-        6. Exit
-        """)
+@receptionist_routes.route('/pay_bills/<int:patient_id>', methods=['POST'])
+def receptionist_pay_bills(patient_id):
+    """
+    Receptionist processes a payment for a patient's bills.
+    """
+    amount = request.json.get('amount')
 
-        try:
-            m2_choice = int(input("Pick an option (1-6): "))
-            actions = {
-                1: schedule_appointment,
-                2: reschedule_appointment,
-                3: cancel_appointment,
-                4: view_appointments,
-                5: confirm_payment
-            }
+    if not amount or amount <= 0:
+        return jsonify({"error": "Invalid amount."}), 400
 
-            if m2_choice in actions:
-                actions[m2_choice]() 
-            elif m2_choice == 6:
-                confirm_exit = input("Are you sure you want to exit? (y/n): ").strip().lower()
-                if confirm_exit == "y":
-                    print("Exiting...")
-                    break
-            else:
-                print("Invalid option. Please choose between 1-6.")
+    payment_reference = f"PAY-{random.randint(100000, 999999)}"
+    
+    db.execute("""
+        INSERT INTO payments (patient_id, amount, payment_status, paypal_transaction_id)
+        VALUES (%s, %s, 'Pending', %s)
+    """, (patient_id, amount, payment_reference))
+    
+    # invalid link
+    paypal_url = f"https://www.paypal.com/pay?hosted_button_id=nullamount={amount}&custom={payment_reference}"
+    webbrowser.open(paypal_url)
 
-        except ValueError:
-            print("Invalid choice! Please enter a number between 1 and 6.")
+    return jsonify({
+        "message": f"Payment initiated. Your payment reference is: {payment_reference}. Please complete the payment."
+    }), 201
 
+
+@receptionist_routes.route('/feedback/<int:patient_id>', methods=['POST'])
+def receptionist_feedback(patient_id):
+    """
+    Allow patients to give feedback for their doctor or receptionist.
+    """
+    recipient = request.json.get('recipient')
+    feedback_text = request.json.get('feedback_text')
+
+    if recipient not in ["doctor", "receptionist"]:
+        return jsonify({"error": "Recipient must be either 'doctor' or 'receptionist'."}), 400
+
+    if not feedback_text:
+        return jsonify({"error": "Feedback text cannot be empty."}), 400
+
+    db.execute("""
+        INSERT INTO feedback (patient_id, recipient, feedback_text)
+        VALUES (%s, %s, %s)
+    """, (patient_id, recipient, feedback_text))
+
+    return jsonify({"message": "Thank you for your feedback!"}), 201

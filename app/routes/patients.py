@@ -1,186 +1,99 @@
-from database import db 
-from queries import *
-from tabulate import tabulate
-from receptionist import * 
-import webbrowser
+from flask import Blueprint, request, jsonify
+from app.models.database import db
+from app.models.queries import *
 import random
+import webbrowser
 
-def patient_appointments(patient_ID):
+patient_routes = Blueprint('patient_routes', __name__)
 
-    view_all_appointments = db.fetchall(GET_PATIENT_APPOINTMENTS, (patient_ID))
-
+@patient_routes.route('/appointments/<int:patient_id>', methods=['GET'])
+def patient_appointments(patient_id):
+    """
+    Fetch patient appointments or allow them to schedule a new one.
+    """
+    appointments = db.fetchall(GET_PATIENT_APPOINTMENTS, (patient_id,))
     headers = ['Appointment Id', 'Patient ID', 'Doctor ID', 'Appointment Date', 'Appointment Time', 'Reason for visit', 'Status']
 
-    if view_all_appointments:
-        print(tabulate(view_all_appointments, headers=headers, tablefmt='grid'))
+    if appointments:
+        return jsonify([dict(zip(headers, appointment)) for appointment in appointments])
     else:
-        print(f"You do not have any scheduled appointments.")
+        return jsonify({"message": "You do not have any scheduled appointments."}), 404
 
-        apt_option = input("Would you like to schedule an appointment? (y/n)").lower()
 
-        if apt_option == y:
-            book_appointment()
-        
-
-def access_records(patient_ID):
-     
-    patient_records = db.fetchall(GET_PATIENT_RECORDS,(patient_ID))
-    
+@patient_routes.route('/records/<int:patient_id>', methods=['GET'])
+def access_records(patient_id):
+    """
+    Fetch patient medical records.
+    """
+    records = db.fetchall(GET_PATIENT_RECORDS, (patient_id,))
     headers = ['Record Id', 'Patient ID', 'Doctor ID', 'Diagnosis', 'Treatment', 'Prescription', 'Visit date', 'Doctors Notes']
 
-    if patient_records:
-        print(tabulate(patient_records, headers=headers, tablefmt='grid'))
+    if records:
+        return jsonify([dict(zip(headers, record)) for record in records])
     else:
-        print(f"Your file does not have any medical records on it.Please consult with your doctor") 
+        return jsonify({"message": "No medical records found. Please consult with your doctor."}), 404
 
 
-def request_prescription(patient_ID):
-
-    patient_prescription = input("What prescription would you like to request? ")
+@patient_routes.route('/prescription/<int:patient_id>', methods=['POST'])
+def request_prescription(patient_id):
+    """
+    Allow a patient to request a prescription.
+    """
+    prescription = request.json.get('prescription')
+    
+    if not prescription:
+        return jsonify({"error": "Prescription is required."}), 400
 
     db.execute("""
         INSERT INTO prescription_requests (patient_id, prescription, request_status)
         VALUES (%s, %s, %s)
-    """, (patient_id, patient_prescription, "Pending"))  # Default is 'Pending'
+    """, (patient_id, prescription, "Pending"))
 
-    print(f"Your request for '{patient_prescription}' has been submitted and is pending approval.")
-
-
-def patient_report(patient_ID):
-
-    patient_name = db.fetchall(GET_PATIENT_NAME)
-
-    view_reports = db.fetch_all(GET_NOTES, (patient_ID,))
-   
-
-    headers = ['Patient ID', 'Lab Report']
-
-    if view_reports:
-        print(f"\nThis is your lab report {GET_PATIENT_NAME}: ") 
-        print(tabulate(view_reports, headers=headers, tablefmt='grid'))
-    else:
-        print(f"You currently do not have a lab report.")
+    return jsonify({"message": f"Your request for '{prescription}' has been submitted and is pending approval."}), 201
 
 
+@patient_routes.route('/pay_bills/<int:patient_id>', methods=['POST'])
+def pay_bills(patient_id):
+    """
+    Patient makes a payment for their bills.
+    """
+    amount = request.json.get('amount')
 
-def pay_bills():
-    patient_id = input("Enter your Health ID: ").strip()
+    if not amount or amount <= 0:
+        return jsonify({"error": "Invalid amount."}), 400
 
-   
-    valid_patient = db.fetch_one(GET_PATIENT_ID, (patient_id,))
-    if not valid_patient:
-        print("Invalid Health ID. Please try again.")
-        return
-
-    
-    try:
-        amount = float(input("Enter the amount to pay: $"))
-        if amount <= 0:
-            print("Invalid amount! Please enter a valid bill amount.")
-            return
-    except ValueError:
-        print("Invalid input! Please enter a valid numeric amount.")
-        return
-
-  
     payment_reference = f"PAY-{random.randint(100000, 999999)}"
-
-   
+    
     db.execute("""
         INSERT INTO payments (patient_id, amount, payment_status, paypal_transaction_id)
         VALUES (%s, %s, 'Pending', %s)
     """, (patient_id, amount, payment_reference))
 
-    print(f"Your payment reference is: {payment_reference}")
-
-    # invalid link
     paypal_url = f"https://www.paypal.com/pay?hosted_button_id=nullamount={amount}&custom={payment_reference}"
+    webbrowser.open(paypal_url)
 
-    print(f"Redirecting to PayPal: {paypal_url}")
-    webbrowser.open(paypal_url)  # Opens in default web browser
-
-    print("Please complete the payment. Your record will be updated once payment is confirmed.")
-
-def give_feedback(patient_ID):
-    while True:
-        
-        recipient = input("Who would you like to give feedback to? (doctor/receptionist): ").strip().lower()
-
-        if recipient not in ["doctor", "receptionist"]:
-            print("Invalid choice! Please enter 'doctor' or 'receptionist'.")
-            continue  
-
-        feedback_text = input(f"Enter your feedback for the {recipient}: ").strip()
-
-        if not feedback_text:
-            print("Feedback cannot be empty! Please enter your feedback.")
-            continue
-
-      # table to be added
-        db.execute("""
-            INSERT INTO feedback (patient_id, recipient, feedback_text)
-            VALUES (%s, %s, %s)
-        """, (patient_ID, recipient, feedback_text))
-
-        print("Thank you for your feedback! It has been submitted successfully.")
-
-        more_feedback = input("Would you like to submit more feedback? (yes/no): ").strip().lower()
-        if more_feedback != "yes":
-            break  
-
-def patient_menu():
-
-    while True:
-        patient_ID = input("Enter your Health ID: ").strip()
-
-      
-        patient_exists = db.fetch_one(GET_PATIENT_ID, (patient_ID,))
-        
-        if patient_exists:
-            break  
-        else:
-            print("Invalid Health ID. Please try again.")
-
-    while True:
-        print("\nWelcome, Patient. Choose an option:")
-        print("""
-        1. View Appointments 
-        2. Access Medical Records
-        3. Book Appointment
-        4. Cancel Appointment
-        5. Request Prescriptions 
-        6. View Lab Reports
-        7. Pay Bills 
-        8. Give Feedback 
-        9. Exit
-        """)
-
-        try:
-            m2_choice = int(input("Pick an option (1-9): "))
-            actions = {
-                1: patient_appointments,
-                2: access_records,
-                3: schedule_appointment,
-                4: cancel_appointment,
-                5: request_prescription,
-                6: patient_report,
-                7: pay_bills,
-                8: give_feedback
-            }
-
-            if m2_choice in actions:
-                actions[m2_choice]() 
-            elif m2_choice == 9:
-                confirm_exit = input("Are you sure you want to exit? (y/n): ").strip().lower()
-                if confirm_exit == "y":
-                    print("Exiting...")
-                    break
-            else:
-                print("Invalid option. Please choose between 1-9.")
-
-        except ValueError:
-            print("Invalid choice! Please enter a number between 1 and 9.")
-
-     
+    return jsonify({
+        "message": f"Payment initiated. Your payment reference is: {payment_reference}. Please complete the payment."
+    }), 201
 
 
+@patient_routes.route('/feedback/<int:patient_id>', methods=['POST'])
+def give_feedback(patient_id):
+    """
+    Allow patients to give feedback for their doctor or receptionist.
+    """
+    recipient = request.json.get('recipient')
+    feedback_text = request.json.get('feedback_text')
+
+    if recipient not in ["doctor", "receptionist"]:
+        return jsonify({"error": "Recipient must be either 'doctor' or 'receptionist'."}), 400
+
+    if not feedback_text:
+        return jsonify({"error": "Feedback text cannot be empty."}), 400
+
+    db.execute("""
+        INSERT INTO feedback (patient_id, recipient, feedback_text)
+        VALUES (%s, %s, %s)
+    """, (patient_id, recipient, feedback_text))
+
+    return jsonify({"message": "Thank you for your feedback!"}), 201
