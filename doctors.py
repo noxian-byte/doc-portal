@@ -118,7 +118,47 @@ def write_notes():
 
     db.execute(UPDATE_DOCTOR_NOTE, (add_doc_notes, p1_choice))
 
-    print(f"Notes added for Patient {patient_name} (ID: {p1_choice}): {add_doc_notes}")
+    print(f"Notes added for Patient {patient_name} (ID: {p1_choice}): {add_doc_notes}") 
+
+def prescription_requests(patient_id):
+
+    patient_request = db.fetchall(GET_PATIENT_REQUESTS, patient_id)
+
+    headers = ['Patient Id', 'Request ID', 'Prescription']
+
+    if patient_request:
+        print(tabulate(patient_request, headers=headers, tablefmt='grid'))
+    else:
+        print(f"This patient did not put in a request for a new prescription.")
+
+    while True:
+         try:
+                doc_descision = input("Would you like accept this request for prescription: {patient_request} (y/n)").lower()
+
+                if doc_descision == "y":
+                        db.execute("""
+                UPDATE prescription_requests 
+                SET request_status = %s
+                WHERE patient_id = %s,
+        """, ('Accepted'),patient_id)
+                        
+                elif doc_descision == "n":
+                        db.execute("""
+                UPDATE prescription_requests 
+                SET request_status = %s
+                WHERE patient_id = %s,
+        """, ('Denied'),patient_id)
+                        
+                else:
+                    print("Invalid input.Make sure to enter either a 'y' or 'n' to make your decision.")
+
+         except ValueError:
+             
+              print("Invalid input.Make sure to enter either a 'y' or 'n' to make your decision.")
+
+
+
+
 
 def doctor_menu():
     while True:
