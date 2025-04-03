@@ -1,2 +1,7 @@
 .env
 __pycache__/
+data/
+Dockerfile
+docker-compose.yml
+init_db.py 
+load_data.sh
